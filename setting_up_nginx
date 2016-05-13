@@ -1,0 +1,109 @@
+package: sudo apt-get install nginx nginx-common
+
+dir: cd til /etc/nginx 
+
+default root: /usr/share/nginx/html (but can change that to use /var/www , which is pretty standard to do because its presumably easier 
+to work with, while its not the default because of some debian policy for packages using the /var/www directory. )
+
+
+tutorials:
+
+https://www.digitalocean.com/community/tutorials/how-to-create-an-ssl-certificate-on-nginx-for-ubuntu-14-04
+
+https://www.digitalocean.com/community/tutorials/how-to-install-nginx-on-ubuntu-14-04-lts
+
+especially(because it shows how to move site configurations from sites-available to sites-enabled, and deleting default):
+https://www.digitalocean.com/community/tutorials/how-to-set-up-nginx-server-blocks-virtual-hosts-on-ubuntu-14-04-lts
+
+
+When i had to setup the nginx server on a ubuntu machine i did the following to get stuff to work:
+
+1. sudo apt-get install nginx nginx-common
+2. ufw allow 443 (thats the port nginx uses for https, which means that if you dont open this port you can debug why https isn't working 4ever)
+	* Something i dont know if even makes a difference, but smt i found when i debugged why https didn't work:
+	    iptables -A INPUT -p tcp -m tcp --sport 443 -j ACCEPT
+	    iptables -A OUTPUT -p tcp -m tcp --dport 443 -j ACCEPT 
+
+3.Then i went into /etc/nginx/sites-available(where we write our intial configuration, and then the idea is that we make a link to this configuration in the /etc/nginx/sites-enabled directory)
+This is my current configuration in sites-available(with http + https(ssl) working):
+# You may add here your 
+# server {
+#       ...
+# }
+# statements for each of your virtual hosts to this file
+
+##
+# You should look at the following URL's in order to grasp a solid understanding
+# of Nginx configuration files in order to fully unleash the power of Nginx.
+# http://wiki.nginx.org/Pitfalls
+# http://wiki.nginx.org/QuickStart
+# http://wiki.nginx.org/Configuration
+#
+# Generally, you will want to move this file somewhere, and start with a clean
+# file but keep this around for reference. Or just disable in sites-enabled.
+#
+# Please see /usr/share/doc/nginx-doc/examples/ for more detailed examples.
+##
+
+server {
+        listen 80 default_server;
+        listen [::]:80 default_server ipv6only=on;
+
+        root /var/www/188.166.167.22/html;
+        index index.html index.htm;
+
+        server_name 188.166.167.22;
+
+        location / {
+                try_files $uri $uri/ =404;
+        }
+}
+
+# HTTPS server
+
+server {
+        listen 443;
+        server_name 188.166.167.22;
+
+        root /var/www/188.166.167.22/html;
+        index index.html index.htm;
+
+        ssl on;
+        ssl_certificate /etc/nginx/ssl/nginx.crt;
+        ssl_certificate_key /etc/nginx/ssl/nginx.key;
+
+        #ssl_session_timeout 5m;
+
+        #ssl_protocols SSLv3 TLSv1 TLSv1.1 TLSv1.2;
+        #ssl_ciphers "HIGH:!aNULL:!MD5 or HIGH:!aNULL:!MD5:!3DES";
+        #ssl_prefer_server_ciphers on;
+
+        location / {
+                try_files $uri $uri/ =404;
+        }
+}
+
+As we can see in the initial server block, we have a default_server flag set, we can only have one of those in our nginx configuration, 
+so it kind of makes that server the entry to all of the other servers. This default server flag will conflict with nginx default server configuration 
+which is located at /etc/nginx/sites-enabled/default  . so rm that file e.g. :
+
+sudo rm /etc/nginx/sites-enabled/default
+
+(maybe default is with all caps, i dont remember)
+
+4. As we can see with the https server, we have a ssl directory, with nginx.crt and nginx.key,
+those we generate in the tutorial: https://www.digitalocean.com/community/tutorials/how-to-create-an-ssl-certificate-on-nginx-for-ubuntu-14-04   and obviously
+those certificates are selfsigned, so that means that getting this to work will still give our page a privacy issue, that maybe we cannot trust the certificate,
+but whatever, its just for testing.
+
+5.We can allso see that we changed the document root from the default /usr/share/nginx/html  to /var/www/<domain_name>/html
+
+6. When satisfied with the /etc/nginx/sites-available/<domain_name>  configuration, 
+we can create the link to it inside of sites-enabled by doing the following command: 
+ln -sf /etc/nginx/sites-available/188.166.167.22 /etc/nginx/sites-enabled/188.166.167.22
+
+7. everytime we change something we have to do  sudo service nginx restart 
+8. we're not done yet though, right now it just serves a index.html file from its root document,
+but i want it to point to a node server, so we can do the following:
+
+
